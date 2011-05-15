@@ -29,7 +29,7 @@ int grid_init( int ng[ 3 ], struct grid *g )
 
   */
 
-  int i;
+  int i, j, k;
   int npx = 3;
   int npy = 2;
   int npz = 1;
@@ -113,6 +113,17 @@ int grid_init( int ng[ 3 ], struct grid *g )
       return EXIT_FAILURE;
   }
   
+  for (i = 0; i < g->nz; i++)
+  {
+  	for (j = 0; j < g->ny; j++)
+  	{
+  		for (k = 0; k < g->nx; k++)
+  		{
+  			g->data[0][i][j][k] = 9999.00;
+  		}
+  	}
+  }
+  
   printf("Allocated an array of (%d, %d, %d) with usable dimensions of (%d, %d, %d)\n", g->nz, g->ny, g->nx, g->nuz, g->nuy, g->nux);
 
   /* Which version of the grid is the "current" version. The other we will write
@@ -165,6 +176,7 @@ void grid_set_boundary( struct grid *g )
      to unity */
 
   int x, y, z, version;
+  int i, j, k;
 
   /* Set each face of the cuboid in turn */
   /* Also remember that we need to do do it for both versions */
@@ -255,7 +267,7 @@ void grid_set_boundary( struct grid *g )
   			}
   		}
   	}
-  }
+  }  
 }
 
 double grid_update( struct grid *g ){
@@ -309,6 +321,12 @@ double grid_update( struct grid *g ){
   MPI_Type_vector(g->ny, g->nx, g->nx, MPI_DOUBLE, &face1);
   MPI_Type_commit(&face1);
   
+  MPI_Type_vector(2*g->ny, 1, g->nx, MPI_DOUBLE, &face2);
+  MPI_Type_commit(&face2);
+  
+  MPI_Type_vector(g->nz, g->nx, g->nx * g->ny, MPI_DOUBLE, &face3);
+  MPI_Type_commit(&face3);
+  
   /* Send to WEST receive from EAST */
   MPI_Sendrecv(&(g->data)[current][0][0][0], 1, face1, g->west, tag,
   	&(g->data)[current][0][0][0], 1, face1, g->east, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -317,8 +335,7 @@ double grid_update( struct grid *g ){
   MPI_Sendrecv(&(g->data)[current][g->nz-1][0][0], 1, face1, g->east, tag,
   	&(g->data)[current][g->nz-1][0][0], 1, face1, g->west, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
   	
-  MPI_Type_vector(2*g->ny, 1, g->nx, MPI_DOUBLE, &face2);
-  MPI_Type_commit(&face2);
+  
   
   /* Send to NORTH receive from SOUTH */
   MPI_Sendrecv(&(g->data)[current][0][0][0], 1, face2, g->north, tag,
@@ -328,9 +345,7 @@ double grid_update( struct grid *g ){
   MPI_Sendrecv(&(g->data)[current][0][g->ny-1][0], 1, face2, g->south, tag,
   	&(g->data)[current][0][0][0], 1, face2, g->north, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
   	
-  /* Exchange Up/Down faces */
-  MPI_Type_vector(g->nz, g->nx, g->nx * g->ny, MPI_DOUBLE, &face3);
-  MPI_Type_commit(&face3);
+  	
   
   /* Send to UP receive from DOWN */
   MPI_Sendrecv(&(g->data)[current][0][0][0], 1, face3, g->up, tag,

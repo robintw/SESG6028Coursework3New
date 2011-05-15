@@ -42,7 +42,7 @@ int main(int argc, char **argv){
   if (rank == 0)
   {
 	/* Read in the input values */
-	fprintf( stdout, "How big should the gird be (nx,ny,nz)?\n" );
+	fprintf( stdout, "How big should the grid be (nx,ny,nz)?\n" );
 	if( fscanf ( stdin , "%i %i %i", &ng[ 0 ], &ng[ 1 ], &ng[ 2 ] ) != 3 ) {
 	fprintf( stderr, "ERROR: Failed to read input: Grid points line incorrect\n" );
 	exit( retval );
@@ -137,7 +137,7 @@ int main(int argc, char **argv){
     /* Add up all the grid points - can be used as a simple
      check that things have worked */
     check = grid_checksum( g );
-    
+    total_check = 0;
     /* Sum all of the sub-checksums */
     MPI_Reduce(&check, &total_check, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 
