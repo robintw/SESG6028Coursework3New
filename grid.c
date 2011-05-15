@@ -30,11 +30,64 @@ int grid_init( int ng[ 3 ], struct grid *g )
   */
 
   int i;
+  int npx = 3;
+  int npy = 2;
+  int npz = 1;
 
-  /* Store the size of the grid */
+  int rank;
+  int periods[3];
+  int dim_size[3];
+  int coords[3];
+
+  MPI_Comm cart_comm;
+
+  /* Store the size of the whole grid */
   for( i = 0; i < 3; i++ ){
-    g->ng[ i ] = ng[ i ];
+    g->whole_size[ i ] = ng[ i ];
   }
+  
+  dim_size[0] = npz;
+  dim_size[1] = npy;
+  dim_size[2] = npx;
+  periods[0] = 0;
+  periods[1] = 0;
+  periods[2] = 0;
+  
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+  /* Create the communicator */	
+  MPI_Cart_create(MPI_COMM_WORLD, 3, dim_size, periods, 1, &cart_comm);
+	
+  /* Get our co-ordinates within that communicator */
+  MPI_Cart_coords(cart_comm, rank, 3, coords);
+    
+  /* Calculate how large a chunk we've got here - this is the size of the chunk that we actually
+  want to be able use - so nux, nuy and nuz*/
+  g->nuz = ceil(g->whole_size[0] / (float) npz);
+  g->nuy = ceil(g->whole_size[1] / (float) npy);
+  g->nux = ceil(g->whole_size[2] / (float) npx);
+  
+  if (coords[0] == (npz - 1))
+  {
+		/* We're at the far end of z */
+		g->nuz = g->whole_size[0] - (g->nuz * (npz - 1));
+  }
+  if (coords[1] == (npy - 1))
+  {
+		/* We're at the far end of y */
+		g->nuy = g->whole_size[1] - (g->nuy * (npy - 1));
+  }
+  if (coords[2] == (npx - 1))
+  {
+		/* We're at the far end of x */
+		g->nux = g->whole_size[2] - (g->nux * (npx - 1));
+  }
+  
+  /* We want each array to actually have two extra elements in each direction so we can
+  store halos or boundary conditions at each end. */
+  g->nx = g->nux + 2;
+  g->ny = g->nuy + 2;
+  g->nz = g->nuz + 2;
 
   /* Allocate the grid. Note we will need two versions of the data on the grid, one to hold
      the current values, and one to write the results into when we are updating the grid. We swap between
@@ -42,10 +95,12 @@ int grid_init( int ng[ 3 ], struct grid *g )
      indicating which version is the most up to date. */
   for( i = 0; i < 2; i++ ){
 
-    g->data[ i ] = alloc_3d_double( g->ng[ 0 ], g->ng[ 1 ], g->ng[ 2 ] ); 
+    g->data[ i ] = alloc_3d_double( g->nz, g->ny, g->nx ); 
     if( g->data[ i ] == NULL )
       return EXIT_FAILURE;
   }
+  
+  printf("Allocated an array of (%d, %d, %d) with usable dimensions of (%d, %d, %d)\n", g->nz, g->ny, g->nx, g->nuz, g->nuy, g->nux);
 
   /* Which version of the grid is the "current" version. The other we will write
      the next result into */
@@ -64,8 +119,8 @@ void grid_finalize( struct grid *g )
 
   /* Free the grid */
 
-  free_3d_double( g->data[ 1 ], g->ng[ 0 ] );
-  free_3d_double( g->data[ 0 ], g->ng[ 0 ] );
+  free_3d_double( g->data[ 1 ], g->whole_size[ 0 ] );
+  free_3d_double( g->data[ 0 ], g->whole_size[ 0 ] );
 
 }
 
@@ -77,9 +132,9 @@ void grid_initial_guess( struct grid *g )
   int i, j, k, l;
 
     for( i = 0; i < 2; i++ ){
-      for( j = 0; j < g->ng[ 0 ] - 1; j++ ){
-	for( k = 0; k < g->ng[ 1 ] - 1; k++ ){
-	  for( l = 0; l < g->ng[ 2 ] - 1; l++ ){
+      for( j = 0; j < g->whole_size[ 0 ] - 1; j++ ){
+	for( k = 0; k < g->whole_size[ 1 ] - 1; k++ ){
+	  for( l = 0; l < g->whole_size[ 2 ] - 1; l++ ){
 	    g->data[ i ][ j ][ k ][ l ] = 0.0;
 	  }
 	}
@@ -103,35 +158,35 @@ void grid_set_boundary( struct grid *g )
 
   /* The (ngx,y,z) face, set to zero*/
   for( k = 0; k < 2; k++ ){
-    for( i = 0; i < g->ng[ 1 ]; i++ ){
-      for( j = 0; j < g->ng[ 2 ]; j++ ){
-	  g->data[ k ][ g->ng[ 0 ] - 1 ][ i ][ j ] = 0.0;
+    for( i = 0; i < g->whole_size[ 1 ]; i++ ){
+      for( j = 0; j < g->whole_size[ 2 ]; j++ ){
+	  g->data[ k ][ g->whole_size[ 0 ] - 1 ][ i ][ j ] = 0.0;
       }
     }
   } 
 
   /* The (x,ngy,z) face, set to zero*/
   for( k = 0; k < 2; k++ ){
-    for( i = 0; i < g->ng[ 0 ]; i++ ){
-      for( j = 0; j < g->ng[ 2 ]; j++ ){
-	g->data[ k ][ i ][ g->ng[ 1 ] - 1 ][ j ] = 0.0;
+    for( i = 0; i < g->whole_size[ 0 ]; i++ ){
+      for( j = 0; j < g->whole_size[ 2 ]; j++ ){
+	g->data[ k ][ i ][ g->whole_size[ 1 ] - 1 ][ j ] = 0.0;
       }
     }
   } 
 
   /* The (x,y,ngz) face, set to zero*/
   for( k = 0; k < 2; k++ ){
-    for( i = 0; i < g->ng[ 0 ]; i++ ){
-      for( j = 0; j < g->ng[ 1 ]; j++ ){
-	g->data[ k ][ i ][ j ][ g->ng[ 2 ] - 1 ] = 0.0;
+    for( i = 0; i < g->whole_size[ 0 ]; i++ ){
+      for( j = 0; j < g->whole_size[ 1 ]; j++ ){
+	g->data[ k ][ i ][ j ][ g->whole_size[ 2 ] - 1 ] = 0.0;
       }
     }
   } 
 
   /* The (0,y,z) face, set to zero*/
   for( k = 0; k < 2; k++ ){
-    for( i = 0; i < g->ng[ 1 ]; i++ ){
-      for( j = 0; j < g->ng[ 2 ]; j++ ){
+    for( i = 0; i < g->whole_size[ 1 ]; i++ ){
+      for( j = 0; j < g->whole_size[ 2 ]; j++ ){
 	g->data[ k ][ 0 ][ i ][ j ] = 0.0;
       }
     }
@@ -139,8 +194,8 @@ void grid_set_boundary( struct grid *g )
 
   /* The (x,0,z) face, set to zero*/
   for( k = 0; k < 2; k++ ){
-    for( i = 0; i < g->ng[ 0 ]; i++ ){
-      for( j = 0; j < g->ng[ 2 ]; j++ ){
+    for( i = 0; i < g->whole_size[ 0 ]; i++ ){
+      for( j = 0; j < g->whole_size[ 2 ]; j++ ){
 	g->data[ k ][ i ][ 0 ][ j ] = 0.0;
       }
     }
@@ -148,8 +203,8 @@ void grid_set_boundary( struct grid *g )
 
   /* The (x,y,0) face, set to unity*/
   for( k = 0; k < 2; k++ ){
-    for( i = 0; i < g->ng[ 0 ]; i++ ){
-      for( j = 0; j < g->ng[ 1 ]; j++ ){
+    for( i = 0; i < g->whole_size[ 0 ]; i++ ){
+      for( j = 0; j < g->whole_size[ 1 ]; j++ ){
 	g->data[ k ][ i ][ j ][ 0 ] = 1.0;
       }
     }
@@ -192,9 +247,9 @@ double grid_update( struct grid *g ){
   lb1 = 1;
   lb2 = 1;
 
-  ub0 = g->ng[ 0 ] - 2;
-  ub1 = g->ng[ 1 ] - 2;
-  ub2 = g->ng[ 2 ] - 2;
+  ub0 = g->whole_size[ 0 ] - 2;
+  ub1 = g->whole_size[ 1 ] - 2;
+  ub2 = g->whole_size[ 2 ] - 2;
 
   /* Perform the update and check for convergence  */
   start = timer();
@@ -237,9 +292,9 @@ double grid_checksum( struct grid g ){
   int i, j, k;
 
   sum = 0.0;
-  for( i = 0; i < g.ng[ 0 ]; i++ ) {
-    for( j = 0; j < g.ng[ 1 ]; j++ ) {
-      for( k = 0; k < g.ng[ 2 ]; k++ ) {
+  for( i = 0; i < g.whole_size[ 0 ]; i++ ) {
+    for( j = 0; j < g.whole_size[ 1 ]; j++ ) {
+      for( k = 0; k < g.whole_size[ 2 ]; k++ ) {
 	sum += g.data[ g.current ][ i ][ j ][ k ];
       }
     }

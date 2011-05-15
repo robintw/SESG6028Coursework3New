@@ -12,7 +12,11 @@ struct grid {
   
   double ***data[ 2 ]; /* The (two versions of) the data on the grid */
   int current;         /* Which version of the grid we are currently using */
-  int ng[ 3 ];         /* The size of the grid */
+  int whole_size[ 3 ];         /* The size of the overall grid */
+  
+  int nx, ny, nz; /* The size of the chunk given to this process */
+  int nux, nuy, nuz; /* The actual usable dimensions of this chunk - ignoring the edge bits used for halos/boundaries */
+  
   int n_iter;          /* The number of iterations */
   double t_iter;       /* The time in the iterations */
 

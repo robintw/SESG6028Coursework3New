@@ -67,6 +67,11 @@ int main(int argc, char **argv){
 	fprintf( stdout, "Running this job at %s\n", ctime( &tp ) );
   }
 
+  /* Broadcast the values we've just got in from the user to the other processes */
+  MPI_Bcast(&ng, 3, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&tol, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&max_iter, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
 
   /* Initialise the grid */
   error = grid_init( ng, &g );
