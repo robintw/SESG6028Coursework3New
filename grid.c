@@ -83,6 +83,14 @@ int grid_init( int ng[ 3 ], struct grid *g )
 		g->nux = g->whole_size[2] - (g->nux * (npx - 1));
   }
   
+  g->pz = coords[0];
+  g->py = coords[1];
+  g->px = coords[2];
+  
+  g->npz = npz;
+  g->npy = npy;
+  g->npx = npx;
+  
   /* We want each array to actually have two extra elements in each direction so we can
   store halos or boundary conditions at each end. */
   g->nx = g->nux + 2;
@@ -119,8 +127,8 @@ void grid_finalize( struct grid *g )
 
   /* Free the grid */
 
-  free_3d_double( g->data[ 1 ], g->whole_size[ 0 ] );
-  free_3d_double( g->data[ 0 ], g->whole_size[ 0 ] );
+  free_3d_double( g->data[ 1 ], g->nz);
+  free_3d_double( g->data[ 0 ], g->nz);
 
 }
 
@@ -132,9 +140,9 @@ void grid_initial_guess( struct grid *g )
   int i, j, k, l;
 
     for( i = 0; i < 2; i++ ){
-      for( j = 0; j < g->whole_size[ 0 ] - 1; j++ ){
-	for( k = 0; k < g->whole_size[ 1 ] - 1; k++ ){
-	  for( l = 0; l < g->whole_size[ 2 ] - 1; l++ ){
+      for( j = 0; j < g->nz; j++ ){
+	for( k = 0; k < g->ny; k++ ){
+	  for( l = 0; l < g->nx; l++ ){
 	    g->data[ i ][ j ][ k ][ l ] = 0.0;
 	  }
 	}
@@ -151,65 +159,98 @@ void grid_set_boundary( struct grid *g )
      As a simple example set all the faces to zero except the bottom xy face, which we set 
      to unity */
 
-  int i, j, k;
+  int x, y, z, version;
 
   /* Set each face of the cuboid in turn */
   /* Also remember that we need to do do it for both versions */
-
-  /* The (ngx,y,z) face, set to zero*/
-  for( k = 0; k < 2; k++ ){
-    for( i = 0; i < g->whole_size[ 1 ]; i++ ){
-      for( j = 0; j < g->whole_size[ 2 ]; j++ ){
-	  g->data[ k ][ g->whole_size[ 0 ] - 1 ][ i ][ j ] = 0.0;
-      }
-    }
-  } 
-
-  /* The (x,ngy,z) face, set to zero*/
-  for( k = 0; k < 2; k++ ){
-    for( i = 0; i < g->whole_size[ 0 ]; i++ ){
-      for( j = 0; j < g->whole_size[ 2 ]; j++ ){
-	g->data[ k ][ i ][ g->whole_size[ 1 ] - 1 ][ j ] = 0.0;
-      }
-    }
-  } 
-
-  /* The (x,y,ngz) face, set to zero*/
-  for( k = 0; k < 2; k++ ){
-    for( i = 0; i < g->whole_size[ 0 ]; i++ ){
-      for( j = 0; j < g->whole_size[ 1 ]; j++ ){
-	g->data[ k ][ i ][ j ][ g->whole_size[ 2 ] - 1 ] = 0.0;
-      }
-    }
-  } 
-
-  /* The (0,y,z) face, set to zero*/
-  for( k = 0; k < 2; k++ ){
-    for( i = 0; i < g->whole_size[ 1 ]; i++ ){
-      for( j = 0; j < g->whole_size[ 2 ]; j++ ){
-	g->data[ k ][ 0 ][ i ][ j ] = 0.0;
-      }
-    }
-  } 
-
-  /* The (x,0,z) face, set to zero*/
-  for( k = 0; k < 2; k++ ){
-    for( i = 0; i < g->whole_size[ 0 ]; i++ ){
-      for( j = 0; j < g->whole_size[ 2 ]; j++ ){
-	g->data[ k ][ i ][ 0 ][ j ] = 0.0;
-      }
-    }
-  } 
-
-  /* The (x,y,0) face, set to unity*/
-  for( k = 0; k < 2; k++ ){
-    for( i = 0; i < g->whole_size[ 0 ]; i++ ){
-      for( j = 0; j < g->whole_size[ 1 ]; j++ ){
-	g->data[ k ][ i ][ j ][ 0 ] = 1.0;
-      }
-    }
-  } 
-
+  
+  if (g->px == 0)
+  {
+  	/* We're at the LOW X face of the grid. So set it to zero. */
+  	for (version = 0; version < 2; version++)
+  	{
+  		for (z = 0; z < g->nz; z++)
+  		{
+  			for (y = 0; y < g->ny; y++)
+  			{
+  				g->data[version][z][y][0] = 0.0;
+  			}
+  		}
+  	}
+  }
+  
+  if (g->px == (g->npx - 1))
+  {
+  	/* We're at the HIGH X face of the grid. So set it to zero */
+  	for (version = 0; version < 2; version++)
+  	{
+  		for (z = 0; z < g->nz; z++)
+  		{
+  			for (y = 0; y < g->ny; y++)
+  			{
+  				g->data[version][z][y][g->nx-1] = 0.0;
+  			}
+  		}
+  	}
+  }
+  
+  if (g->py == 0)
+  {
+  	/* We're at the LOW Y face of the grid. So set it to zero */
+  	for (version = 0; version < 2; version++)
+  	{
+  		for (z = 0; z < g->nz; z++)
+  		{
+  			for (x = 0; x < g->nx; x++)
+  			{
+  				g->data[version][z][0][x] = 0.0;
+  			}
+  		}
+  	}
+  }
+  
+  if (g->py == (g->npy - 1))
+  {
+  	/* We're at the HIGH Y face of the grid. So set it to zero */
+  	for (version = 0; version < 2; version++)
+  	{
+  		for (z = 0; z < g->nz; z++)
+  		{
+  			for (x = 0; x < g->nx; x++)
+  			{
+  				g->data[version][z][g->ny-1][x] = 0.0;
+  			}
+  		}
+  	}
+  }
+  
+  if (g->pz == 0)
+  {
+  	for (version = 0; version < 2; version++)
+  	{
+  		for (y = 0; y < g->ny; y++)
+  		{
+  			for (x = 0; x < g->nx; x++)
+  			{
+  				g->data[version][0][y][x] = 0.0;
+  			}
+  		}
+  	}
+  }
+  
+  if (g->pz == (g->npz - 1))
+  {
+  	for (version = 0; version < 2; version++)
+  	{
+  		for (y = 0; y < g->ny; y++)
+  		{
+  			for (x = 0; x < g->nx; x++)
+  			{
+  				g->data[version][g->nz-1][y][x] = 0.0;
+  			}
+  		}
+  	}
+  }
 }
 
 double grid_update( struct grid *g ){
@@ -247,9 +288,9 @@ double grid_update( struct grid *g ){
   lb1 = 1;
   lb2 = 1;
 
-  ub0 = g->whole_size[ 0 ] - 2;
-  ub1 = g->whole_size[ 1 ] - 2;
-  ub2 = g->whole_size[ 2 ] - 2;
+  ub0 = g->nz - 2;
+  ub1 = g->ny - 2;
+  ub2 = g->nx - 2;
 
   /* Perform the update and check for convergence  */
   start = timer();
@@ -292,9 +333,9 @@ double grid_checksum( struct grid g ){
   int i, j, k;
 
   sum = 0.0;
-  for( i = 0; i < g.whole_size[ 0 ]; i++ ) {
-    for( j = 0; j < g.whole_size[ 1 ]; j++ ) {
-      for( k = 0; k < g.whole_size[ 2 ]; k++ ) {
+  for( i = 0; i < g.nz; i++ ) {
+    for( j = 0; j < g.ny; j++ ) {
+      for( k = 0; k < g.nx; k++ ) {
 	sum += g.data[ g.current ][ i ][ j ][ k ];
       }
     }

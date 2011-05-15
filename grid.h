@@ -17,6 +17,9 @@ struct grid {
   int nx, ny, nz; /* The size of the chunk given to this process */
   int nux, nuy, nuz; /* The actual usable dimensions of this chunk - ignoring the edge bits used for halos/boundaries */
   
+  int px, py, pz; /* Positions in the grid */
+  int npx, npy, npz; /* Number of processors in the grid */
+  
   int n_iter;          /* The number of iterations */
   double t_iter;       /* The time in the iterations */
 
