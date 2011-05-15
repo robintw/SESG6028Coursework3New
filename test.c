@@ -98,6 +98,8 @@ int main(int argc, char **argv){
     {
     	/* Do the actual update */
 		dg = grid_update( &g );
+		
+		printf("Process %d. dg = %f\n", rank, dg);
 	
     	/* Pass the maximum change (returned from grid_update) back to the root process
 		so that it can then check to see if it is smaller than the tolerance */
@@ -106,7 +108,7 @@ int main(int argc, char **argv){
 		/* On the root process ONLY, decide whether we've converged */
 		if (rank == 0)
 		{
-			fprintf( stdout, "Iter %5i Max change %20.12f\n", i, max_dg );
+			printf("!!!!! max_dg = %f\n", max_dg);
 			if (max_dg < tol)
 			{
 				converged = 1;
@@ -119,8 +121,11 @@ int main(int argc, char **argv){
 		/* If we have, then exit the loop (all processes will do this) */
 		if (converged == 1)
 		{
+			printf("###### We've converged!\n");
 			break;
 		}
+	
+		fprintf( stdout, "Iter %5i Max change %20.12f\n", i, dg );
 
     }
     
