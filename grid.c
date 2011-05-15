@@ -310,9 +310,9 @@ double grid_update( struct grid *g ){
   lb1 = 1;
   lb2 = 1;
 
-  ub0 = g->nz - 2;
-  ub1 = g->ny - 2;
-  ub2 = g->nx - 2;
+  ub0 = g->nz - 1;
+  ub1 = g->ny - 1;
+  ub2 = g->nx - 1;
   
   /* ################################### */
   /* ######### Do Halo Exchange ######## */
@@ -336,7 +336,6 @@ double grid_update( struct grid *g ){
   	&(g->data)[current][g->nz-1][0][0], 1, face1, g->west, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
   	
   
-  
   /* Send to NORTH receive from SOUTH */
   MPI_Sendrecv(&(g->data)[current][0][0][0], 1, face2, g->north, tag,
   	&(g->data)[current][0][0][0], 1, face2, g->south, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -358,9 +357,9 @@ double grid_update( struct grid *g ){
   /* Perform the update and check for convergence  */
   start = timer();
   dg = 0.0;
-  for( i = lb0; i <= ub0; i++ ) {
-    for( j = lb1; j <= ub1; j++ ) {
-      for( k = lb2; k <= ub2; k++ ) {
+  for( i = lb0; i < ub0; i++ ) {
+    for( j = lb1; j < ub1; j++ ) {
+      for( k = lb2; k < ub2; k++ ) {
 	g->data[ update ][ i ][ j ][ k ] = 
 	  ONE_SIXTH * ( g->data[ current ][ i + 1 ][ j     ][ k     ] +
 			g->data[ current ][ i - 1 ][ j     ][ k     ] +
