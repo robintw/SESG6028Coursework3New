@@ -309,11 +309,36 @@ double grid_update( struct grid *g ){
   MPI_Type_vector(g->ny, g->nx, g->nx, MPI_DOUBLE, &face1);
   MPI_Type_commit(&face1);
   
+  /* Send to WEST receive from EAST */
   MPI_Sendrecv(&(g->data)[current][0][0][0], 1, face1, g->west, tag,
   	&(g->data)[current][0][0][0], 1, face1, g->east, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-  	
+  
+  /* Send to EAST receive from WEST */
   MPI_Sendrecv(&(g->data)[current][g->nz-1][0][0], 1, face1, g->east, tag,
   	&(g->data)[current][g->nz-1][0][0], 1, face1, g->west, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+  	
+  MPI_Type_vector(2*g->ny, 1, g->nx, MPI_DOUBLE, &face2);
+  MPI_Type_commit(&face2);
+  
+  /* Send to NORTH receive from SOUTH */
+  MPI_Sendrecv(&(g->data)[current][0][0][0], 1, face2, g->north, tag,
+  	&(g->data)[current][0][0][0], 1, face2, g->south, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+  
+  /* Send to SOUTH receive from NORTH */
+  MPI_Sendrecv(&(g->data)[current][0][g->ny-1][0], 1, face2, g->south, tag,
+  	&(g->data)[current][0][0][0], 1, face2, g->north, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+  	
+  /* Exchange Up/Down faces */
+  MPI_Type_vector(g->nz, g->nx, g->nx * g->ny, MPI_DOUBLE, &face3);
+  MPI_Type_commit(&face3);
+  
+  /* Send to UP receive from DOWN */
+  MPI_Sendrecv(&(g->data)[current][0][0][0], 1, face3, g->up, tag,
+  	&(g->data)[current][0][0][0], 1, face3, g->down, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+  	
+  /* Send to DOWN receive from UP */
+  MPI_Sendrecv(&(g->data)[current][0][0][g->nx-1], 1, face3, g->down, tag,
+  	&(g->data)[current][0][0][g->nx-1], 1, face3, g->up, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);  
 
   /* Perform the update and check for convergence  */
   start = timer();
