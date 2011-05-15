@@ -291,6 +291,8 @@ double grid_update( struct grid *g ){
   ub0 = g->nz - 2;
   ub1 = g->ny - 2;
   ub2 = g->nx - 2;
+  
+  
 
   /* Perform the update and check for convergence  */
   start = timer();
