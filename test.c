@@ -98,6 +98,8 @@ int main(int argc, char **argv){
     {
     	/* Do the actual update */
 		dg = grid_update( &g );
+		
+		printf("Process %d. dg = %f\n", rank, dg);
 	
     	/* Pass the maximum change (returned from grid_update) back to the root process
 		so that it can then check to see if it is smaller than the tolerance */

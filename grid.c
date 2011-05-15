@@ -91,6 +91,11 @@ int grid_init( int ng[ 3 ], struct grid *g )
   g->npy = npy;
   g->npx = npx;
   
+  /* Who are my neighbours in each direction? */
+  MPI_Cart_shift( cart_comm, 2, 1, &g->north, &g->south    );
+  MPI_Cart_shift( cart_comm, 1, 1, &g->west, &g->east );
+  MPI_Cart_shift( cart_comm, 0, 1, &g->up, &g->down );
+  
   /* We want each array to actually have two extra elements in each direction so we can
   store halos or boundary conditions at each end. */
   g->nx = g->nux + 2;
@@ -232,7 +237,7 @@ void grid_set_boundary( struct grid *g )
   		{
   			for (x = 0; x < g->nx; x++)
   			{
-  				g->data[version][0][y][x] = 0.0;
+  				g->data[version][0][y][x] = 1.0;
   			}
   		}
   	}
@@ -265,6 +270,11 @@ double grid_update( struct grid *g ){
   int current, update;
   int lb0, lb1, lb2, ub0, ub1, ub2;
   int i, j, k;
+  int tag = 0;
+  
+  MPI_Datatype face1;
+  MPI_Datatype face2;
+  MPI_Datatype face3;
 
   /* Work out which version of the grid hold the current values, and
      which we will write the update into */
@@ -292,7 +302,18 @@ double grid_update( struct grid *g ){
   ub1 = g->ny - 2;
   ub2 = g->nx - 2;
   
+  /* ################################### */
+  /* ######### Do Halo Exchange ######## */
+  /* ################################### */
   
+  MPI_Type_vector(g->ny, g->nx, g->nx, MPI_DOUBLE, &face1);
+  MPI_Type_commit(&face1);
+  
+  MPI_Sendrecv(&(g->data)[current][0][0][0], 1, face1, g->west, tag,
+  	&(g->data)[current][0][0][0], 1, face1, g->east, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+  	
+  MPI_Sendrecv(&(g->data)[current][g->nz-1][0][0], 1, face1, g->east, tag,
+  	&(g->data)[current][g->nz-1][0][0], 1, face1, g->west, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
   /* Perform the update and check for convergence  */
   start = timer();
