@@ -20,7 +20,7 @@ struct grid {
   int px, py, pz; /* Positions in the grid */
   int npx, npy, npz; /* Number of processors in the grid */
   
-  int north, south, east, west, up, down; /* Neighbours */
+  int up_x, down_x, up_y, down_y, up_z, down_z; /* Neighbours */
   
   int n_iter;          /* The number of iterations */
   double t_iter;       /* The time in the iterations */
