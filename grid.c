@@ -395,9 +395,9 @@ double grid_checksum( struct grid g ){
   int i, j, k;
 
   sum = 0.0;
-  for( i = 0; i < g.nz; i++ ) {
-    for( j = 0; j < g.ny; j++ ) {
-      for( k = 0; k < g.nx; k++ ) {
+  for( i = 1; i < g.nz - 1; i++ ) {
+    for( j = 1; j < g.ny - 1; j++ ) {
+      for( k = 1; k < g.nx - 1; k++ ) {
 	sum += g.data[ g.current ][ i ][ j ][ k ];
       }
     }
