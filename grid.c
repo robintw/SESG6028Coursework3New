@@ -33,6 +33,8 @@ int grid_init( int ng[ 3 ], struct grid *g )
   int npx = 3;
   int npy = 2;
   int npz = 1;
+  
+  int minus;
 
   int rank;
   int periods[3];
@@ -62,10 +64,20 @@ int grid_init( int ng[ 3 ], struct grid *g )
   MPI_Cart_coords(cart_comm, rank, 3, coords);
     
   /* Calculate how large a chunk we've got here - this is the size of the chunk that we actually
-  want to be able use - so nux, nuy and nuz*/
+  want to be able use - so nux, nuy and nuz
+  
+  - 2 because of the boundary conditions */
+  
+  printf("Whole size: %d, %d, %d\n", g->whole_size[0], g->whole_size[1], g->whole_size[2]);
+  printf("npz = %d\n", npz);  
+  
+  g->whole_size[0] = g->whole_size[0] - 2;
+  g->whole_size[1] = g->whole_size[1] - 2;
+  g->whole_size[2] = g->whole_size[2] - 2;
+  
   g->nuz = ceil(g->whole_size[0] / (float) npz);
   g->nuy = ceil(g->whole_size[1] / (float) npy);
-  g->nux = ceil(g->whole_size[2] / (float) npx);
+  g->nux = ceil(g->whole_size[2]/ (float) npx);
   
   if (coords[0] == (npz - 1))
   {
