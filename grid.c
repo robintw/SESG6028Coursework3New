@@ -398,12 +398,16 @@ double grid_checksum( struct grid g ){
 
   int i, j, k;
   
+  int rank;
+  
   int ubx, lbx, uby, lby, ubz, lbz;
   
   lbx = lby = lbz = 1;
   ubx = g.nx - 1;
   uby = g.ny - 1;
   ubz = g.nz - 1;
+  
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   
   if (g.px == 0)
   {
@@ -435,6 +439,7 @@ double grid_checksum( struct grid g ){
   	ubz = g.nz;
   }  
   
+  printf("Process %d. X: %d -> %d. Y: %d -> %d. Z: %d -> %d\n", rank, lbx, ubx, lby, uby, lbz, ubz);
 
   sum = 0.0;
   for( i = lbz; i < ubz; i++ ) {
