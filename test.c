@@ -17,7 +17,8 @@ int main(int argc, char **argv){
 
   double tol, dg, max_dg;
   double check, total_check;
-  double start, finish;
+  double start = 0.0;
+  double finish = 0.0;
 
   int ng[ 3 ];
 
@@ -27,17 +28,19 @@ int main(int argc, char **argv){
   int retval;
   int i;
   
+  int npx, npy, npz;
+  
   int rank, nprocs;
 
   /* Ever the optimist ... Assume the code has failed until we see otherwise */
   retval = EXIT_FAILURE;
   
+  /* Initialise the MPI subsystem */
   MPI_Init(&argc, &argv);
   
+  /* Get the number of processes we have access to and the rank of the current process */
   MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  
-  printf("Running with %d processes\n", nprocs);
 
   if (rank == 0)
   {
@@ -57,6 +60,25 @@ int main(int argc, char **argv){
 	fprintf( stderr, "ERROR: Failed to read input: Number of iterations line incorrect\n" );
 	exit( retval );
 	}
+	
+	fprintf( stdout, "What is the number of processes in the X direction\n" );
+	if( fscanf ( stdin , "%i", &npx ) != 1 ) {
+		fprintf( stderr, "ERROR: Failed to read input: Number of processes in X direction line incorrect\n" );
+		exit( retval );
+	}
+	
+	fprintf( stdout, "What is the number of processes in the Y direction\n" );
+	if( fscanf ( stdin , "%i", &npy ) != 1 ) {
+		fprintf( stderr, "ERROR: Failed to read input: Number of processes in Y direction line incorrect\n" );
+		exit( retval );
+	}
+	
+	fprintf( stdout, "What is the number of processes in the Z direction\n" );
+	if( fscanf ( stdin , "%i", &npz ) != 1 ) {
+		fprintf( stderr, "ERROR: Failed to read input: Number of processes in Z direction line incorrect\n" );
+		exit( retval );
+	}
+	
 	fprintf( stdout, "\n" );
 	
 	/* Report the input data */
@@ -65,6 +87,7 @@ int main(int argc, char **argv){
 	   "The maximum number of iterations is %i\n", 
 		   ng[ 0 ], ng[ 1 ], ng[ 2 ], tol, max_iter );
 	tp = time( &tp );
+		fprintf( stdout, "Running on %d processors\n", nprocs);
 	fprintf( stdout, "Running this job at %s\n", ctime( &tp ) );
   }
 
@@ -72,71 +95,85 @@ int main(int argc, char **argv){
   MPI_Bcast(&ng, 3, MPI_INT, 0, MPI_COMM_WORLD);
   MPI_Bcast(&tol, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
   MPI_Bcast(&max_iter, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  
+  MPI_Bcast(&npx, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&npy, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&npz, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
 
 
   /* Initialise the grid */
-  error = grid_init( ng, &g );
+  error = grid_init( ng, npx, npy, npz, &g );
 
-    /* Set the inital guess at the solution */
-    grid_initial_guess( &g );
+  /* Set the inital guess at the solution */
+  grid_initial_guess( &g );
 
-    /* Set the boundary conditions */
-    grid_set_boundary( &g );
+  /* Set the boundary conditions */
+  grid_set_boundary( &g );
 
-    /* Loop updating the grid until the change is sufficently small to consider
-       the calculation converged */
+  /* Loop updating the grid until the change is sufficently small to consider
+     the calculation converged */
        
+  /* Start the timer */
+  if (rank == 0)
+  {
+   	start = timer();
+  }
+
+  /* Assume we haven't converged */
+  converged = 0;
+  
+  
+  for( i = 1; i <= max_iter; i++ )
+  {
+  	/* Do the actual update */
+	dg = grid_update( &g );
+
+   	/* Pass the maximum change (returned from grid_update) back to the root process
+	so that it can then check to see if it is smaller than the tolerance */
+	MPI_Reduce(&dg, &max_dg, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+	
+	/* On the root process ONLY, decide whether we've converged */
 	if (rank == 0)
 	{
-    	start = timer();
-    }
-    
-    
-
-    converged = 0;
-    for( i = 1; i <= max_iter; i++ )
-    {
-    	/* Do the actual update */
-		dg = grid_update( &g );
-	
-    	/* Pass the maximum change (returned from grid_update) back to the root process
-		so that it can then check to see if it is smaller than the tolerance */
-		MPI_Reduce(&dg, &max_dg, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-	
-		/* On the root process ONLY, decide whether we've converged */
-		if (rank == 0)
+		/* Let the user know how it's going */
+		fprintf( stdout, "Iter %5i Max change %20.12f\n", i, max_dg );
+		
+		/* If the reduced difference is less than the tolerance then say that we've converged */
+		if (max_dg < tol)
 		{
-			fprintf( stdout, "Iter %5i Max change %20.12f\n", i, max_dg );
-			if (max_dg < tol)
-			{
-				converged = 1;
-			}
+			converged = 1;
 		}
+	}
 	
-		/* Send a value to all of the processes to say if we've converged or not */
-		MPI_Bcast(&converged, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	/* Send a value to all of the processes to say if we've converged or not */
+	MPI_Bcast(&converged, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	
-		/* If we have, then exit the loop (all processes will do this) */
-		if (converged == 1)
-		{
-			break;
-		}
-
-    }
+	/* If we have, then exit the loop (all processes will do this) */
+	if (converged == 1)
+	{
+		break;
+	}
+   }
     
-    if (rank == 0)
-    {
-    	finish = timer();
-    }
+	/* Get the time now we've finished updating the grid */
+   if (rank == 0)
+   {
+   		finish = timer();
+   }
 
     /* Add up all the grid points - can be used as a simple
      check that things have worked */
+    
+    /* Get the checksum */
     check = grid_checksum( g );
+    
     total_check = 0;
-    /* Sum all of the sub-checksums */
+    /* Sum all of the sub-checksums by using a MPI_Reduce */
     MPI_Reduce(&check, &total_check, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 
 
+	/* Print out the results */
 	if (rank == 0)
 	{
 		/* Report what happened */
@@ -153,12 +190,12 @@ int main(int argc, char **argv){
 		fprintf( stdout, "\n" );
 		grid_print_times( g );
 	
-		/* finalise the grid */
-		grid_finalize( &g );
-	
 		/* Calculation worked so tell the world */
 		retval = EXIT_SUCCESS;
 	}
+
+  /* finalise the grid */
+  grid_finalize( &g );
 
   MPI_Finalize();
   return retval;

@@ -28,7 +28,7 @@ struct grid {
 };
 
 /* The prototypes */
-int grid_init( int ng[ 3 ], struct grid *g );    /* Initialise the grid */
+int grid_init( int ng[ 3 ], int npx, int npy, int npz, struct grid *g );    /* Initialise the grid */
 void grid_finalize( struct grid *g );            /* Finalise the grid   */ 
 void grid_initial_guess( struct grid *g );       /* The initial guess at the solution */
 void grid_set_boundary( struct grid *g );        /* Set the bondary conditions */

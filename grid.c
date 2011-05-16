@@ -19,23 +19,21 @@ Written by I.J.Bush March 2011 - if it breaks your computer or aught else, tough
 #include "timer.h"
 #include <mpi.h>
 
-int grid_init( int ng[ 3 ], struct grid *g )
+int grid_init( int ng[ 3 ], int npx, int npy, int npz, struct grid *g )
 {
 
   /* Initialise the grid 
      Arguments are:
      ng        - The total number of points in the grid
+     npx	   - The number of processes in the X direction
+     npy	   - The number of processes in the Y direction
+     npz	   - The number of processes in the Z direction
      grid      - The derived type holding all the data about the grid
 
   */
 
-  int i, j, k;
-  int npx = 3;
-  int npy = 2;
-  int npz = 1;
+  int i;
   
-  int minus;
-
   int rank;
   int periods[3];
   int dim_size[3];
@@ -67,9 +65,6 @@ int grid_init( int ng[ 3 ], struct grid *g )
   want to be able use - so nux, nuy and nuz
   
   - 2 because of the boundary conditions */
-  
-  printf("Whole size: %d, %d, %d\n", g->whole_size[0], g->whole_size[1], g->whole_size[2]);
-  printf("npz = %d\n", npz);  
   
   g->whole_size[0] = g->whole_size[0] - 2;
   g->whole_size[1] = g->whole_size[1] - 2;
@@ -125,19 +120,6 @@ int grid_init( int ng[ 3 ], struct grid *g )
       return EXIT_FAILURE;
   }
   
-  for (i = 0; i < g->nz; i++)
-  {
-  	for (j = 0; j < g->ny; j++)
-  	{
-  		for (k = 0; k < g->nx; k++)
-  		{
-  			g->data[0][i][j][k] = 9999.00;
-  		}
-  	}
-  }
-  
-  printf("Process %d (%d, %d, %d). Allocated an array of (%d, %d, %d) with usable dimensions of (%d, %d, %d)\n", rank, g->pz, g->py, g->px, g->nz, g->ny, g->nx, g->nuz, g->nuy, g->nux);
-
   /* Which version of the grid is the "current" version. The other we will write
      the next result into */
   g->current = 0;
@@ -188,7 +170,6 @@ void grid_set_boundary( struct grid *g )
      to unity */
 
   int x, y, z, version;
-  int i, j, k;
 
   /* Set each face of the cuboid in turn */
   /* Also remember that we need to do do it for both versions */
@@ -292,7 +273,7 @@ double grid_update( struct grid *g ){
   double start, finish;
 
 
-	int rank;
+  int rank;
   int current, update;
   int lb0, lb1, lb2, ub0, ub1, ub2;
   int i, j, k;
@@ -334,6 +315,7 @@ double grid_update( struct grid *g ){
   /* ######### Do Halo Exchange ######## */
   /* ################################### */
   
+  /* Create the vector types to extract each of the faces */
   MPI_Type_vector(g->ny, g->nx, g->nx, MPI_DOUBLE, &face1);
   MPI_Type_commit(&face1);
   
@@ -343,34 +325,29 @@ double grid_update( struct grid *g ){
   MPI_Type_vector(g->nz, g->nx, g->ny * g->nx, MPI_DOUBLE, &face3);
   MPI_Type_commit(&face3);
     
-  /* Send to WEST receive from EAST */
+  /* Do the sending and receiving - making sure we send and receive from the right bits */
   MPI_Sendrecv(&(g->data)[current][1][0][0], 1, face1, g->up_z, tag,
   	&(g->data)[current][g->nz-1][0][0], 1, face1, g->down_z, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
   
-  /* Send to EAST receive from WEST */
   MPI_Sendrecv(&(g->data)[current][g->nz-2][0][0], 1, face1, g->down_z, tag,
   	&(g->data)[current][0][0][0], 1, face1, g->up_z, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
   	
   
-  /* Send to NORTH receive from SOUTH */
   MPI_Sendrecv(&(g->data)[current][0][1][0], 1, face3, g->up_y, tag,
   	&(g->data)[current][0][g->ny-1][0], 1, face3, g->down_y, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
   
-  /* Send to SOUTH receive from NORTH */
   MPI_Sendrecv(&(g->data)[current][0][g->ny-2][0], 1, face3, g->down_y, tag,
   	&(g->data)[current][0][0][0], 1, face3, g->up_y, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
   	
   	
-  
-  /* Send to UP receive from DOWN */
   MPI_Sendrecv(&(g->data)[current][0][0][1], 1, face2, g->up_x, tag,
   	&(g->data)[current][0][0][g->nx-1], 1, face2, g->down_x, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
   	
-  /* Send to DOWN receive from UP */
   MPI_Sendrecv(&(g->data)[current][0][0][g->nx-2], 1, face2, g->down_x, tag,
   	&(g->data)[current][0][0][0], 1, face2, g->up_x, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);  
 
   /* Perform the update and check for convergence  */
+  /* NB: the condition check has been changed from <= to < compared to the serial version */
   start = timer();
   dg = 0.0;
   for( i = lb0; i < ub0; i++ ) {
@@ -414,6 +391,9 @@ double grid_checksum( struct grid g ){
   
   int ubx, lbx, uby, lby, ubz, lbz;
   
+  /* Work out whether we're on the edge or not, as boundary conditions MUST be included
+  in the checksum, but the halo exchanges MUST NOT be included */
+  
   lbx = lby = lbz = 1;
   ubx = g.nx - 1;
   uby = g.ny - 1;
@@ -450,8 +430,6 @@ double grid_checksum( struct grid g ){
   {
   	ubz = g.nz;
   }  
-  
-  printf("Process %d. X: %d -> %d. Y: %d -> %d. Z: %d -> %d\n", rank, lbx, ubx, lby, uby, lbz, ubz);
 
   sum = 0.0;
   for( i = lbz; i < ubz; i++ ) {
